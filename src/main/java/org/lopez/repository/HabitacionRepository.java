@@ -10,6 +10,5 @@ import java.util.Optional;
 public interface HabitacionRepository extends JpaRepository<Habitacion, Long> {
     Optional<Habitacion> findByNumero(String numero);
     List<Habitacion> findByEstado(Habitacion.EstadoHabitacion estado);
-    List<Habitacion> findByTipo(Habitacion.TipoHabitacion tipo);
     boolean existsByNumero(String numero);
 }

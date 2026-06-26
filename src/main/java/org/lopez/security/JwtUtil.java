@@ -9,9 +9,6 @@ import org.springframework.stereotype.Component;
 import java.security.Key;
 import java.util.Date;
 
-/**
- * Utilidad para generación y validación de tokens JWT.
- */
 @Component
 public class JwtUtil {
 
@@ -25,7 +22,6 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    /** Genera un token JWT para el usuario autenticado */
     public String generateToken(UserDetails userDetails) {
         return Jwts.builder()
                 .setSubject(userDetails.getUsername())
@@ -36,7 +32,6 @@ public class JwtUtil {
                 .compact();
     }
 
-    /** Extrae el username (email) del token */
     public String extractUsername(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(getKey()).build()
@@ -44,7 +39,6 @@ public class JwtUtil {
                 .getBody().getSubject();
     }
 
-    /** Valida el token contra los detalles del usuario */
     public boolean validateToken(String token, UserDetails userDetails) {
         String username = extractUsername(token);
         return username.equals(userDetails.getUsername()) && !isTokenExpired(token);

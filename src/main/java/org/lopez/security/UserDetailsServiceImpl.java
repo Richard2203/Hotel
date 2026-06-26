@@ -8,11 +8,8 @@ import org.springframework.security.core.userdetails.*;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
-/**
- * Implementación de UserDetailsService que carga el usuario
- * desde la base de datos por email para Spring Security.
- */
 @Service
 @RequiredArgsConstructor
 public class UserDetailsServiceImpl implements UserDetailsService {
@@ -24,12 +21,16 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado: " + email));
 
-        return new User(
+        List<SimpleGrantedAuthority> authorities = usuario.getRoles().stream()
+                .map(rol -> new SimpleGrantedAuthority("ROLE_" + rol.getNombre()))
+                .collect(Collectors.toList());
+
+        return new org.springframework.security.core.userdetails.User(
                 usuario.getEmail(),
                 usuario.getPassword(),
                 usuario.isActivo(),
                 true, true, true,
-                List.of(new SimpleGrantedAuthority("ROLE_" + usuario.getRol().name()))
+                authorities
         );
     }
 }

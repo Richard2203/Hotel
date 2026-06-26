@@ -4,6 +4,7 @@ import org.lopez.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -22,16 +23,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 /**
  * Configuración de Spring Security.
  *
- * Rutas públicas (sin token):
- *   POST /api/auth/register
- *   POST /api/auth/login
- *   GET  /swagger-ui/**
- *   GET  /v3/api-docs/**
- *
- * Rutas protegidas:
- *   /api/habitaciones/** → USER, ADMIN
- *   /api/reservaciones/** → USER, ADMIN
- *   /api/usuarios/**     → ADMIN
+ * El Front End (HTML/CSS/JS estático) es público; la protección
+ * real ocurre a nivel de API REST. El JS del front guarda el token
+ * y lo envía en cada petición protegida.
  */
 @Configuration
 @EnableWebSecurity
@@ -42,15 +36,11 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
 
-    // Rutas accesibles sin autenticación
     private static final String[] PUBLIC_URLS = {
+            "/", "/index.html", "/login.html", "/reservaciones.html",
+            "/css/**", "/js/**", "/favicon.ico",
             "/api/auth/**",
-            "/swagger-ui/**",
-            "/swagger-ui.html",
-            "/v3/api-docs/**",
-            "/v3/api-docs",
-            "/swagger-resources/**",
-            "/webjars/**"
+            "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/v3/api-docs"
     };
 
     @Bean
@@ -60,6 +50,14 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_URLS).permitAll()
+                // Lectura de habitaciones: cualquier usuario autenticado
+                .requestMatchers(HttpMethod.GET, "/api/habitaciones/**").authenticated()
+                // Escritura de habitaciones: solo ADMIN
+                .requestMatchers(HttpMethod.POST, "/api/habitaciones/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/habitaciones/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/habitaciones/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH, "/api/habitaciones/**").hasRole("ADMIN")
+                // Usuarios: solo ADMIN
                 .requestMatchers("/api/usuarios/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )

@@ -7,12 +7,6 @@ import org.lopez.repository.HabitacionRepository;
 import org.lopez.repository.ReservacionRepository;
 import org.lopez.repository.UsuarioRepository;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Future;
@@ -36,8 +30,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/reservaciones")
 @RequiredArgsConstructor
-@Tag(name = "Reservaciones", description = "Gestión de reservaciones de habitaciones: creación, consulta y cambio de estado.")
-@SecurityRequirement(name = "bearerAuth")
+@Tag(name = "Reservaciones", description = "Registro, consulta, edición y cancelación de reservaciones.")
 public class ReservacionController {
 
     private final ReservacionRepository reservacionRepository;
@@ -55,54 +48,31 @@ public class ReservacionController {
         private String observaciones;
     }
 
-    // ── GET /api/reservaciones ─────────────────────────────────
-
+    // ── LISTAR TODAS (ADMIN) ───────────────────────────────────
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Listar todas las reservaciones",
-            description = "Retorna todas las reservaciones del sistema. **Requiere rol ADMIN.**")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Lista de reservaciones"),
-            @ApiResponse(responseCode = "403", description = "Acceso denegado")
-    })
+    @Operation(summary = "Listar todas las reservaciones (ADMIN)")
     public ResponseEntity<List<Reservacion>> listarTodas(
-            @Parameter(description = "Filtrar por estado", example = "CONFIRMADA")
             @RequestParam(required = false) Reservacion.EstadoReservacion estado) {
-
         List<Reservacion> lista = estado != null
                 ? reservacionRepository.findByEstado(estado)
                 : reservacionRepository.findAll();
         return ResponseEntity.ok(lista);
     }
 
-    // ── GET /api/reservaciones/mis-reservaciones ───────────────
-
+    // ── MIS RESERVACIONES ──────────────────────────────────────
     @GetMapping("/mis-reservaciones")
-    @Operation(summary = "Ver mis reservaciones",
-            description = "Retorna las reservaciones del usuario autenticado.")
-    @ApiResponse(responseCode = "200", description = "Lista de reservaciones del usuario")
+    @Operation(summary = "Ver mis reservaciones")
     public ResponseEntity<List<Reservacion>> misReservaciones(
             @AuthenticationPrincipal UserDetails userDetails) {
-
         Usuario usuario = usuarioRepository.findByEmail(userDetails.getUsername()).orElseThrow();
         return ResponseEntity.ok(reservacionRepository.findByUsuarioId(usuario.getId()));
     }
 
-    // ── GET /api/reservaciones/{id} ────────────────────────────
-
+    // ── OBTENER POR ID ─────────────────────────────────────────
     @GetMapping("/{id}")
-    @Operation(summary = "Obtener reservación por ID",
-            description = "Retorna los detalles de una reservación específica.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Reservación encontrada"),
-            @ApiResponse(responseCode = "404", description = "Reservación no encontrada",
-                    content = @Content(examples = @ExampleObject(value = """
-                {"error": "Reservación no encontrada"}""")))
-    })
-    public ResponseEntity<?> obtenerPorId(
-            @Parameter(description = "ID de la reservación", example = "1")
-            @PathVariable Long id) {
-
+    @Operation(summary = "Obtener reservación por ID")
+    public ResponseEntity<?> obtenerPorId(@PathVariable Long id) {
         Optional<Reservacion> found = reservacionRepository.findById(id);
         if (found.isPresent()) {
             return ResponseEntity.ok(found.get());
@@ -111,35 +81,27 @@ public class ReservacionController {
                 .body(Map.of("error", "Reservación no encontrada"));
     }
 
-    // ── POST /api/reservaciones ────────────────────────────────
-
+    // ── REGISTRAR RESERVACIÓN ──────────────────────────────────
     @PostMapping
-    @Operation(summary = "Crear reservación",
-            description = "Crea una nueva reservación para el usuario autenticado. El total se calcula automáticamente según los días y el precio de la habitación.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Reservación creada exitosamente"),
-            @ApiResponse(responseCode = "400", description = "Fechas inválidas o habitación no disponible",
-                    content = @Content(examples = @ExampleObject(value = """
-                {"error": "La habitación no está disponible"}""")))
-    })
-    public ResponseEntity<?> crear(
-            @Valid @RequestBody ReservacionRequest request,
-            @AuthenticationPrincipal UserDetails userDetails) {
+    @Operation(summary = "Registrar reservación")
+    public ResponseEntity<?> crear(@Valid @RequestBody ReservacionRequest request,
+                                   @AuthenticationPrincipal UserDetails userDetails) {
 
         if (!request.getFechaSalida().isAfter(request.getFechaEntrada())) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("error", "La fecha de salida debe ser posterior a la de entrada"));
+                .body(Map.of("error", "La fecha de salida debe ser posterior a la de entrada"));
         }
 
-        Habitacion habitacion = habitacionRepository.findById(request.getHabitacionId())
-                .orElse(null);
-        if (habitacion == null) {
+        Optional<Habitacion> habOpt = habitacionRepository.findById(request.getHabitacionId());
+        if (habOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Habitación no encontrada"));
+                .body(Map.of("error", "Habitación no encontrada"));
         }
+        Habitacion habitacion = habOpt.get();
+
         if (habitacion.getEstado() != Habitacion.EstadoHabitacion.DISPONIBLE) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("error", "La habitación no está disponible"));
+                .body(Map.of("error", "La habitación no está disponible"));
         }
 
         Usuario usuario = usuarioRepository.findByEmail(userDetails.getUsername()).orElseThrow();
@@ -154,30 +116,58 @@ public class ReservacionController {
         r.setFechaSalida(request.getFechaSalida());
         r.setTotal(total);
         r.setObservaciones(request.getObservaciones());
+        r.setEstado(Reservacion.EstadoReservacion.PENDIENTE);
 
-        // Marcar habitación como ocupada
         habitacion.setEstado(Habitacion.EstadoHabitacion.OCUPADA);
         habitacionRepository.save(habitacion);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(reservacionRepository.save(r));
     }
 
-    // ── PATCH /api/reservaciones/{id}/estado ──────────────────
+    // ── EDITAR RESERVACIÓN ─────────────────────────────────────
+    @PutMapping("/{id}")
+    @Operation(summary = "Editar reservación (fechas y observaciones)")
+    public ResponseEntity<?> editar(@PathVariable Long id,
+                                    @Valid @RequestBody ReservacionRequest request,
+                                    @AuthenticationPrincipal UserDetails userDetails) {
 
+        Optional<Reservacion> found = reservacionRepository.findById(id);
+        if (found.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Reservación no encontrada"));
+        }
+        Reservacion r = found.get();
+
+        // El usuario solo puede editar sus propias reservaciones (a menos que sea admin)
+        Usuario usuario = usuarioRepository.findByEmail(userDetails.getUsername()).orElseThrow();
+        boolean esAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (!esAdmin && !r.getUsuario().getId().equals(usuario.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No puedes editar reservaciones de otros usuarios"));
+        }
+
+        if (!request.getFechaSalida().isAfter(request.getFechaEntrada())) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", "La fecha de salida debe ser posterior a la de entrada"));
+        }
+
+        r.setFechaEntrada(request.getFechaEntrada());
+        r.setFechaSalida(request.getFechaSalida());
+        r.setObservaciones(request.getObservaciones());
+
+        long noches = ChronoUnit.DAYS.between(request.getFechaEntrada(), request.getFechaSalida());
+        r.setTotal(r.getHabitacion().getPrecioPorNoche().multiply(BigDecimal.valueOf(noches)));
+
+        return ResponseEntity.ok(reservacionRepository.save(r));
+    }
+
+    // ── CAMBIAR ESTADO (ADMIN) ─────────────────────────────────
     @PatchMapping("/{id}/estado")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Cambiar estado de reservación",
-            description = "Cambia el estado de una reservación. Si se cancela, la habitación vuelve a DISPONIBLE. **Requiere rol ADMIN.**")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Estado actualizado"),
-            @ApiResponse(responseCode = "404", description = "Reservación no encontrada")
-    })
-    public ResponseEntity<?> cambiarEstado(
-            @Parameter(description = "ID de la reservación", example = "1")
-            @PathVariable Long id,
-            @Parameter(description = "Nuevo estado", example = "CONFIRMADA")
-            @RequestParam Reservacion.EstadoReservacion estado) {
-
+    @Operation(summary = "Cambiar estado de reservación (ADMIN)")
+    public ResponseEntity<?> cambiarEstado(@PathVariable Long id,
+                                           @RequestParam Reservacion.EstadoReservacion estado) {
         Optional<Reservacion> found = reservacionRepository.findById(id);
         if (found.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -191,5 +181,33 @@ public class ReservacionController {
             habitacionRepository.save(r.getHabitacion());
         }
         return ResponseEntity.ok(reservacionRepository.save(r));
+    }
+
+    // ── CANCELAR RESERVACIÓN ───────────────────────────────────
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Cancelar reservación")
+    public ResponseEntity<?> cancelar(@PathVariable Long id,
+                                      @AuthenticationPrincipal UserDetails userDetails) {
+        Optional<Reservacion> found = reservacionRepository.findById(id);
+        if (found.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Reservación no encontrada"));
+        }
+        Reservacion r = found.get();
+
+        Usuario usuario = usuarioRepository.findByEmail(userDetails.getUsername()).orElseThrow();
+        boolean esAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (!esAdmin && !r.getUsuario().getId().equals(usuario.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No puedes cancelar reservaciones de otros usuarios"));
+        }
+
+        r.setEstado(Reservacion.EstadoReservacion.CANCELADA);
+        r.getHabitacion().setEstado(Habitacion.EstadoHabitacion.DISPONIBLE);
+        habitacionRepository.save(r.getHabitacion());
+        reservacionRepository.save(r);
+
+        return ResponseEntity.ok(Map.of("mensaje", "Reservación cancelada exitosamente"));
     }
 }

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso — Hotel</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="login-wrapper">
+    <div class="login-box">
+        <h1>Hotel</h1>
+        <p class="sub">Sistema de Gestión de Reservaciones</p>
+
+        <!-- LOGIN -->
+        <div id="login-form">
+            <label>Correo electrónico</label>
+            <input id="login-email" type="email" placeholder="admin@hotel.com">
+            <label>Contraseña</label>
+            <input id="login-password" type="password" placeholder="••••••••">
+            <button class="btn btn-primary" onclick="doLogin()">Iniciar sesión</button>
+            <p class="switch">¿No tienes cuenta? <a onclick="switchForm('register')">Regístrate</a></p>
+        </div>
+
+        <!-- REGISTER -->
+        <div id="register-form" style="display:none">
+            <label>Nombre completo</label>
+            <input id="reg-nombre" type="text" placeholder="Juan Pérez">
+            <label>Correo electrónico</label>
+            <input id="reg-email" type="email" placeholder="correo@ejemplo.com">
+            <label>Contraseña (mín. 6 caracteres)</label>
+            <input id="reg-password" type="password" placeholder="••••••••">
+            <button class="btn btn-primary" onclick="doRegister()">Crear cuenta</button>
+            <p class="switch">¿Ya tienes cuenta? <a onclick="switchForm('login')">Inicia sesión</a></p>
+        </div>
+    </div>
+</div>
+
+<script src="js/auth.js"></script>
+<script>
+    // Si ya hay sesión, ir directo al panel
+    if (getToken()) window.location.href = 'index.html';
+
+    function switchForm(form) {
+        document.getElementById('login-form').style.display = form === 'login' ? 'block' : 'none';
+        document.getElementById('register-form').style.display = form === 'register' ? 'block' : 'none';
+    }
+
+    async function doLogin() {
+        const email = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value.trim();
+        if (!email || !password) { showToast(false, 'Completa todos los campos'); return; }
+
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                saveSession(data);
+                window.location.href = 'index.html';
+            } else {
+                showToast(false, data.error || 'Error al iniciar sesión');
+            }
+        } catch (e) {
+            showToast(false, 'No se pudo conectar con el servidor');
+        }
+    }
+
+    async function doRegister() {
+        const nombre = document.getElementById('reg-nombre').value.trim();
+        const email = document.getElementById('reg-email').value.trim();
+        const password = document.getElementById('reg-password').value.trim();
+        if (!nombre || !email || !password) { showToast(false, 'Completa todos los campos'); return; }
+
+        try {
+            const res = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre, email, password, rol: 'USUARIO' })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(true, 'Cuenta creada. Ahora inicia sesión.');
+                switchForm('login');
+            } else {
+                showToast(false, data.error || 'Error al registrarse');
+            }
+        } catch (e) {
+            showToast(false, 'No se pudo conectar con el servidor');
+        }
+    }
+</script>
+
+</body>
+</html>

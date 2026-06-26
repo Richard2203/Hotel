@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reservaciones — Hotel</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+    <h1>Hotel — Panel</h1>
+    <div class="user-info">
+        <span id="welcome"></span>
+        <button onclick="logout()">Cerrar sesión</button>
+    </div>
+</header>
+
+<div class="container">
+    <div class="tabs">
+        <button class="tab-btn" onclick="location.href='index.html'">Habitaciones</button>
+        <button class="tab-btn active" onclick="location.href='reservaciones.html'">Reservaciones</button>
+    </div>
+
+    <!-- Formulario nueva reservación -->
+    <div class="card">
+        <h2 id="form-title">Nueva Reservación</h2>
+        <input type="hidden" id="r-id">
+        <div class="form-grid">
+            <div>
+                <label>Habitación</label>
+                <select id="r-habitacion"><option value="">Cargando...</option></select>
+            </div>
+            <div>
+                <label>Fecha de entrada</label>
+                <input id="r-entrada" type="date">
+            </div>
+            <div>
+                <label>Fecha de salida</label>
+                <input id="r-salida" type="date">
+            </div>
+            <div>
+                <label>Observaciones</label>
+                <input id="r-observaciones" type="text" placeholder="Opcional">
+            </div>
+        </div>
+        <br>
+        <button class="btn btn-primary" id="btn-guardar" onclick="guardarReservacion()">Reservar</button>
+        <button class="btn btn-secondary" id="btn-cancelar-edicion" style="display:none" onclick="cancelarEdicion()">Cancelar edición</button>
+    </div>
+
+    <!-- Tabla de reservaciones -->
+    <div class="card">
+        <h2 id="tabla-title">Mis Reservaciones</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th><th>Habitación</th><th class="admin-only">Usuario</th>
+                    <th>Entrada</th><th>Salida</th><th>Total</th>
+                    <th>Estado</th><th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="reservaciones-body">
+                <tr><td colspan="8">Cargando...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="js/auth.js"></script>
+<script>
+    requireAuth();
+    document.getElementById('welcome').textContent =
+        `${getNombre()} (${isAdmin() ? 'ADMIN' : 'USUARIO'})`;
+
+    if (isAdmin()) {
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+        document.getElementById('tabla-title').textContent = 'Todas las Reservaciones';
+    }
+
+    // ── Cargar habitaciones disponibles en el select ──
+    async function cargarHabitacionesSelect() {
+        try {
+            const res = await apiFetch('/api/habitaciones?estado=DISPONIBLE');
+            const data = await res.json();
+            const sel = document.getElementById('r-habitacion');
+            if (!data.length) {
+                sel.innerHTML = '<option value="">No hay habitaciones disponibles</option>';
+                return;
+            }
+            sel.innerHTML = data.map(h =>
+                `<option value="${h.id}">#${h.numero} - ${h.tipo} ($${Number(h.precioPorNoche).toFixed(2)}/noche)</option>`
+            ).join('');
+        } catch (e) {
+            showToast(false, 'Error al cargar habitaciones');
+        }
+    }
+
+    // ── Cargar reservaciones ──
+    async function cargarReservaciones() {
+        const url = isAdmin() ? '/api/reservaciones' : '/api/reservaciones/mis-reservaciones';
+        try {
+            const res = await apiFetch(url);
+            const data = await res.json();
+            const tbody = document.getElementById('reservaciones-body');
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="8">No hay reservaciones.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(r => `
+                <tr>
+                    <td>${r.id}</td>
+                    <td>#${r.habitacion?.numero || '-'}</td>
+                    <td class="admin-only" ${isAdmin() ? '' : 'style="display:none"'}>${r.usuario?.nombre || '-'}</td>
+                    <td>${r.fechaEntrada}</td>
+                    <td>${r.fechaSalida}</td>
+                    <td>$${Number(r.total).toFixed(2)}</td>
+                    <td><span class="badge badge-${r.estado.toLowerCase()}">${r.estado}</span></td>
+                    <td>
+                        ${renderAcciones(r)}
+                    </td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            showToast(false, 'Error al cargar reservaciones');
+        }
+    }
+
+    function renderAcciones(r) {
+        let acciones = '';
+        // Editar/cancelar solo si no está cancelada/completada
+        if (r.estado === 'PENDIENTE' || r.estado === 'CONFIRMADA') {
+            acciones += `<button class="btn btn-secondary btn-sm" onclick='editarReservacion(${JSON.stringify(r)})'>Editar</button> `;
+            acciones += `<button class="btn btn-danger btn-sm" onclick="cancelarReservacion(${r.id})">Cancelar</button> `;
+        }
+        // Admin puede confirmar/completar
+        if (isAdmin() && r.estado === 'PENDIENTE') {
+            acciones += `<button class="btn btn-primary btn-sm" onclick="cambiarEstado(${r.id}, 'CONFIRMADA')">Confirmar</button>`;
+        }
+        if (isAdmin() && r.estado === 'CONFIRMADA') {
+            acciones += `<button class="btn btn-primary btn-sm" onclick="cambiarEstado(${r.id}, 'COMPLETADA')">Completar</button>`;
+        }
+        return acciones || '—';
+    }
+
+    // ── Guardar (crear o editar) ──
+    async function guardarReservacion() {
+        const id = document.getElementById('r-id').value;
+        const body = {
+            habitacionId: parseInt(document.getElementById('r-habitacion').value),
+            fechaEntrada: document.getElementById('r-entrada').value,
+            fechaSalida: document.getElementById('r-salida').value,
+            observaciones: document.getElementById('r-observaciones').value.trim()
+        };
+        if (!body.habitacionId || !body.fechaEntrada || !body.fechaSalida) {
+            showToast(false, 'Completa habitación y fechas'); return;
+        }
+
+        const editando = !!id;
+        const url = editando ? '/api/reservaciones/' + id : '/api/reservaciones';
+        const method = editando ? 'PUT' : 'POST';
+
+        try {
+            const res = await apiFetch(url, { method, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(true, editando ? 'Reservación actualizada' : 'Reservación registrada');
+                cancelarEdicion();
+                cargarReservaciones();
+                cargarHabitacionesSelect();
+            } else {
+                showToast(false, data.error || 'Error al guardar');
+            }
+        } catch (e) {
+            showToast(false, 'Error en la petición');
+        }
+    }
+
+    // ── Editar ──
+    function editarReservacion(r) {
+        document.getElementById('r-id').value = r.id;
+        document.getElementById('r-entrada').value = r.fechaEntrada;
+        document.getElementById('r-salida').value = r.fechaSalida;
+        document.getElementById('r-observaciones').value = r.observaciones || '';
+        // Agregar la habitación actual al select por si no está disponible
+        const sel = document.getElementById('r-habitacion');
+        if (![...sel.options].some(o => o.value == r.habitacion.id)) {
+            const opt = document.createElement('option');
+            opt.value = r.habitacion.id;
+            opt.textContent = `#${r.habitacion.numero} (actual)`;
+            sel.appendChild(opt);
+        }
+        sel.value = r.habitacion.id;
+        document.getElementById('form-title').textContent = 'Editar Reservación #' + r.id;
+        document.getElementById('btn-guardar').textContent = 'Actualizar';
+        document.getElementById('btn-cancelar-edicion').style.display = '';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelarEdicion() {
+        document.getElementById('r-id').value = '';
+        document.getElementById('r-entrada').value = '';
+        document.getElementById('r-salida').value = '';
+        document.getElementById('r-observaciones').value = '';
+        document.getElementById('form-title').textContent = 'Nueva Reservación';
+        document.getElementById('btn-guardar').textContent = 'Reservar';
+        document.getElementById('btn-cancelar-edicion').style.display = 'none';
+    }
+
+    // ── Cancelar reservación ──
+    async function cancelarReservacion(id) {
+        if (!confirm('¿Cancelar esta reservación?')) return;
+        try {
+            const res = await apiFetch('/api/reservaciones/' + id, { method: 'DELETE' });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(true, 'Reservación cancelada');
+                cargarReservaciones();
+                cargarHabitacionesSelect();
+            } else {
+                showToast(false, data.error || 'Error al cancelar');
+            }
+        } catch (e) {
+            showToast(false, 'Error en la petición');
+        }
+    }
+
+    // ── Cambiar estado (admin) ──
+    async function cambiarEstado(id, estado) {
+        try {
+            const res = await apiFetch(`/api/reservaciones/${id}/estado?estado=${estado}`, { method: 'PATCH' });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(true, 'Estado actualizado a ' + estado);
+                cargarReservaciones();
+                cargarHabitacionesSelect();
+            } else {
+                showToast(false, data.error || 'Error al cambiar estado');
+            }
+        } catch (e) {
+            showToast(false, 'Error en la petición');
+        }
+    }
+
+    cargarHabitacionesSelect();
+    cargarReservaciones();
+</script>
+
+</body>
+</html>

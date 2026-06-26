@@ -21,26 +21,26 @@ public class GlobalExceptionHandler {
         for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
             errors.put(fe.getField(), fe.getDefaultMessage());
         }
-        return ResponseEntity.badRequest().body(Map.of(
-            "error", "Validación fallida",
-            "campos", errors,
-            "timestamp", LocalDateTime.now().toString()
-        ));
+        Map<String, Object> body = new HashMap<>();
+        body.put("error", "Validación fallida");
+        body.put("campos", errors);
+        body.put("timestamp", LocalDateTime.now().toString());
+        return ResponseEntity.badRequest().body(body);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccess(AccessDeniedException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
-            "error", "Acceso denegado — se requiere un rol superior",
-            "timestamp", LocalDateTime.now().toString()
-        ));
+        Map<String, Object> body = new HashMap<>();
+        body.put("error", "Acceso denegado — se requiere un rol superior");
+        body.put("timestamp", LocalDateTime.now().toString());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-            "error", "Error interno: " + ex.getMessage(),
-            "timestamp", LocalDateTime.now().toString()
-        ));
+        Map<String, Object> body = new HashMap<>();
+        body.put("error", "Error interno: " + ex.getMessage());
+        body.put("timestamp", LocalDateTime.now().toString());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 }
