@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/usuarios")
@@ -29,7 +30,7 @@ public class UsuarioController {
 
     @GetMapping
     @Operation(summary = "Listar todos los usuarios",
-               description = "Retorna la lista completa de usuarios registrados en el sistema.")
+            description = "Retorna la lista completa de usuarios registrados en el sistema.")
     @ApiResponse(responseCode = "200", description = "Lista de usuarios obtenida exitosamente")
     public ResponseEntity<List<Usuario>> listar() {
         return ResponseEntity.ok(usuarioRepository.findAll());
@@ -38,48 +39,58 @@ public class UsuarioController {
     @GetMapping("/{id}")
     @Operation(summary = "Obtener usuario por ID")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Usuario encontrado"),
-        @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
+            @ApiResponse(responseCode = "200", description = "Usuario encontrado"),
+            @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
     })
     public ResponseEntity<?> obtener(
             @Parameter(description = "ID del usuario", example = "1")
             @PathVariable Long id) {
-        return usuarioRepository.findById(id)
-                .map(u -> (ResponseEntity<?>) ResponseEntity.ok(u))
-                .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Usuario no encontrado")));
+
+        Optional<Usuario> found = usuarioRepository.findById(id);
+        if (found.isPresent()) {
+            return ResponseEntity.ok(found.get());
+        }
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("error", "Usuario no encontrado"));
     }
 
     @PatchMapping("/{id}/toggle-activo")
     @Operation(summary = "Activar/desactivar usuario",
-               description = "Alterna el estado activo/inactivo de un usuario.")
+            description = "Alterna el estado activo/inactivo de un usuario.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Estado del usuario actualizado"),
-        @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
+            @ApiResponse(responseCode = "200", description = "Estado del usuario actualizado"),
+            @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
     })
     public ResponseEntity<?> toggleActivo(@PathVariable Long id) {
-        return usuarioRepository.findById(id).map(u -> {
-            u.setActivo(!u.isActivo());
-            return (ResponseEntity<?>) ResponseEntity.ok(usuarioRepository.save(u));
-        }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", "Usuario no encontrado")));
+        Optional<Usuario> found = usuarioRepository.findById(id);
+        if (found.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Usuario no encontrado"));
+        }
+        Usuario u = found.get();
+        u.setActivo(!u.isActivo());
+        return ResponseEntity.ok(usuarioRepository.save(u));
     }
 
     @PatchMapping("/{id}/rol")
     @Operation(summary = "Cambiar rol de usuario",
-               description = "Cambia el rol de un usuario entre USER y ADMIN.")
+            description = "Cambia el rol de un usuario entre USER y ADMIN.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Rol actualizado"),
-        @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
+            @ApiResponse(responseCode = "200", description = "Rol actualizado"),
+            @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
     })
     public ResponseEntity<?> cambiarRol(
             @PathVariable Long id,
             @Parameter(description = "Nuevo rol", example = "ADMIN")
             @RequestParam Usuario.Rol rol) {
-        return usuarioRepository.findById(id).map(u -> {
-            u.setRol(rol);
-            return (ResponseEntity<?>) ResponseEntity.ok(usuarioRepository.save(u));
-        }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", "Usuario no encontrado")));
+
+        Optional<Usuario> found = usuarioRepository.findById(id);
+        if (found.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Usuario no encontrado"));
+        }
+        Usuario u = found.get();
+        u.setRol(rol);
+        return ResponseEntity.ok(usuarioRepository.save(u));
     }
 }

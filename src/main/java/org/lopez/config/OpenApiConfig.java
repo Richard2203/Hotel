@@ -31,7 +31,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 // ── Info general ──────────────────────────────────────
                 .info(new Info()
-                        .title("Hotel API — ESCOM IPN")
+                        .title("Hotel AP")
                         .description(
                             "API REST para la gestión de un sistema hotelero. " +
                             "Permite administrar habitaciones, reservaciones y usuarios.\n\n" +
@@ -39,18 +39,12 @@ public class OpenApiConfig {
                             "Esta API usa **JWT Bearer Token**. Para acceder a endpoints protegidos:\n" +
                             "1. Ejecuta `POST /api/auth/login` con tus credenciales.\n" +
                             "2. Copia el `token` de la respuesta.\n" +
-                            "3. Presiona el botón **Authorize** (🔒) e ingresa: `Bearer <token>`.\n\n" +
-                            "**Alumno:** López García Ricardo  \n" +
-                            "**Materia:** Web Client and Backend Development Framework  \n" +
-                            "**Profesor:** M. en C. José Asunción Enríquez Zárate"
+                            "3. Presiona el botón **Authorize** e ingresa: `Bearer <token>`.\n\n" +
+                            "**Alumno:** López García Ricardo  \n"
                         )
                         .version("1.0.0")
                         .contact(new Contact()
-                                .name("Ricardo López García")
-                                .email("logari.1805@gmail.com"))
-                        .license(new License()
-                                .name("ESCOM IPN — Uso académico")
-                                .url("https://www.escom.ipn.mx/"))
+                                .name("Ricardo López García"))
                 )
                 // ── Esquema de seguridad JWT ──────────────────────────
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME))
